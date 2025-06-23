@@ -2,195 +2,155 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <title>Gráfica de Función con Asintotas</title>
+  <title>Graficador de funciones racionales tipo Mathway</title>
   <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.8.0/math.min.js"></script>
   <style>
     body {
-      font-family: 'Segoe UI', sans-serif;
-      background-color: #f4f6f9;
-      color: #333;
-      padding: 20px;
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      max-width: 800px;
     }
-
-    .container {
-      max-width: 900px;
-      margin: auto;
-      background-color: #fff;
-      padding: 25px;
-      border-radius: 15px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-    }
-
     input, button {
-      font-size: 16px;
-      padding: 10px;
-      border-radius: 10px;
-      border: 1px solid #ccc;
-      width: 100%;
-      box-sizing: border-box;
+      padding: 8px;
+      margin: 5px;
     }
-
-    button {
-      background-color: #007bff;
-      color: white;
-      cursor: pointer;
-      margin-top: 10px;
+    #resultado {
+      margin-top: 20px;
+      font-size: 18px;
     }
-
-    button:hover {
-      background-color: #0056b3;
-    }
-
-    #grafico {
-      margin-top: 25px;
-    }
-
-    #info {
-      margin-top: 15px;
-      font-size: 16px;
+    code {
+      background: #f2f2f2;
+      padding: 2px 5px;
+      border-radius: 4px;
     }
   </style>
 </head>
 <body>
+  <h2>Graficador racional estilo Mathway</h2>
+  <label>Ingresa una función racional: (ej: (x^2 - 1)/(x^2 - 4))</label><br>
+  <input type="text" id="funcionInput" size="40" value="(x^2 - 1)/(x^2 - 4)">
+  <button onclick="graficar()">Graficar</button>
 
-  <div class="container">
-    <h2>📐 Gráfica de Funciones con Asíntotas</h2>
-
-    <label for="funcion">Escribe la función (ej: x+2, x**2 - 3, 1/(x-2)):</label>
-    <input type="text" id="funcion" placeholder="Ej: 1/(x-2)">
-
-    <button onclick="graficarFuncion()">Graficar y Analizar</button>
-    <button onclick="leerExplicacion()">🔊 Escuchar Explicación</button>
-
-    <div id="info"></div>
-    <div id="grafico"></div>
-  </div>
+  <div id="grafico" style="width: 100%; height: 500px;"></div>
+  <div id="resultado"></div>
 
   <script>
-    let textoExplicacion = "";
+    function graficar() {
+      const expr = document.getElementById("funcionInput").value;
+      const node = math.parse(expr);
+      const compiled = node.compile();
 
-    function evaluarFuncion(expr, x) {
-      try {
-        return eval(expr);
-      } catch {
-        return NaN;
-      }
-    }
+      const x_vals = [];
+      const y_vals = [];
 
-    function encontrarAsintotasVerticales(expr, xRange) {
-      let asintotas = [];
-      for (let i = xRange[0]; i <= xRange[1]; i += 0.5) {
-        let y1 = evaluarFuncion(expr, i);
-        let y2 = evaluarFuncion(expr, i + 0.1);
-        if ((Math.abs(y1) > 1e5 || Math.abs(y2) > 1e5 || isNaN(y1)) &&
-            Math.abs(y1 - y2) > 50) {
-          asintotas.push(parseFloat(i.toFixed(1)));
-        }
-      }
-      return [...new Set(asintotas)];
-    }
-
-    function filtrarValoresExtremos(arr) {
-      // Elimina valores demasiado grandes para evitar errores visuales
-      return arr.filter(y => isFinite(y) && Math.abs(y) < 1e5);
-    }
-
-    function graficarFuncion() {
-      const expr = document.getElementById('funcion').value;
-      const x_vals = [], y_vals = [];
-      const xStart = -100, xEnd = 100;
-
-      for (let x = xStart; x <= xEnd; x += 0.2) {
-        let y = evaluarFuncion(expr, x);
-        if (!isNaN(y) && isFinite(y)) {
-          x_vals.push(x);
-          y_vals.push(y);
-        } else {
-          x_vals.push(x);
-          y_vals.push(null);
+      for (let x = -20; x <= 20; x += 0.1) {
+        try {
+          const y = compiled.evaluate({ x });
+          if (Math.abs(y) < 1e5) {
+            x_vals.push(x);
+            y_vals.push(y);
+          } else {
+            x_vals.push(NaN);
+            y_vals.push(NaN);
+          }
+        } catch {
+          x_vals.push(NaN);
+          y_vals.push(NaN);
         }
       }
 
-      // Rango limpio
-      const yFiltrados = filtrarValoresExtremos(y_vals);
-      const minY = Math.min(...yFiltrados);
-      const maxY = Math.max(...yFiltrados);
+      // Detección de asíntotas verticales
+      const frac = math.simplify(expr);
+      const denomMatch = expr.match(/\/\(([^)]+)\)/);
+      let asintotasVerticales = [];
+      if (denomMatch) {
+        const denom = denomMatch[1];
+        try {
+          const factorizado = math.factor(denom);
+          const zeros = math.simplify(`roots(${denom})`).toString();
+          const ceros = math.evaluate(`roots(${denom})`);
+          asintotasVerticales = Array.isArray(ceros) ? ceros.map(r => math.round(r, 3)) : [];
+        } catch {}
+      }
 
-      const funcionPlot = {
+      // Estimación del rango
+      const y_validos = y_vals.filter(y => !isNaN(y) && isFinite(y));
+      const minY = Math.min(...y_validos);
+      const maxY = Math.max(...y_validos);
+
+      // Trazar función
+      const trace_funcion = {
         x: x_vals,
         y: y_vals,
         mode: 'lines',
         name: 'Función',
-        line: { color: '#007bff', width: 2 }
+        line: { color: 'blue' }
       };
 
-      const asintotas = encontrarAsintotasVerticales(expr, [xStart, xEnd]);
-
-      const verticales = asintotas.map(x => ({
-        type: 'line',
-        x0: x,
-        x1: x,
-        y0: minY - 10,
-        y1: maxY + 10,
-        line: {
-          color: 'hotpink',
-          width: 2,
-          dash: 'dot'
-        }
+      // Trazar asíntotas verticales
+      const trace_asintotas_v = asintotasVerticales.map(x => ({
+        x: [x, x],
+        y: [-50, 50],
+        mode: 'lines',
+        name: `x = ${x}`,
+        line: { color: 'red', dash: 'dot' },
+        showlegend: false
       }));
 
-      // Asíntota horizontal si tiende a valor fijo
-      let horizontal = null;
-      const promedio = yFiltrados.reduce((a, b) => a + b, 0) / yFiltrados.length;
-      const dispersion = Math.max(...yFiltrados) - Math.min(...yFiltrados);
-      if (dispersion < 0.1) {
-        horizontal = {
-          type: 'line',
-          x0: xStart,
-          x1: xEnd,
-          y0: promedio,
-          y1: promedio,
-          line: {
-            color: 'green',
-            width: 2,
-            dash: 'dot'
-          }
-        };
-      }
+      // Estimación de asíntota horizontal
+      let asintotaH = null;
+      try {
+        const top = node.args[0]; // numerador
+        const bottom = node.args[1]; // denominador
+        const gradoTop = math.simplify(top).filter(n => n.isSymbolNode && n.name === 'x').length;
+        const gradoBot = math.simplify(bottom).filter(n => n.isSymbolNode && n.name === 'x').length;
+
+        if (gradoTop < gradoBot) asintotaH = 0;
+        else if (gradoTop === gradoBot) {
+          const lcTop = math.derivative(top, 'x').evaluate({ x: 1 });
+          const lcBot = math.derivative(bottom, 'x').evaluate({ x: 1 });
+          asintotaH = lcTop / lcBot;
+        }
+      } catch {}
+
+      const trace_asintota_h = asintotaH !== null ? [{
+        x: [-20, 20],
+        y: [asintotaH, asintotaH],
+        mode: 'lines',
+        name: `y = ${asintotaH.toFixed(2)}`,
+        line: { color: 'green', dash: 'dot' },
+        showlegend: false
+      }] : [];
 
       const layout = {
-        title: '📈 Gráfica de la Función',
+        title: 'Gráfica de la función',
         xaxis: { title: 'x' },
-        yaxis: { title: 'f(x)', autorange: true },
-        shapes: [...verticales, ...(horizontal ? [horizontal] : [])]
+        yaxis: { title: 'f(x)', range: [-20, 20] }
       };
 
-      Plotly.newPlot('grafico', [funcionPlot], layout);
+      Plotly.newPlot('grafico', [trace_funcion, ...trace_asintotas_v, ...trace_asintota_h], layout);
 
-      const dominio = `Todos los reales${asintotas.length ? ` (excepto en x = ${asintotas.join(', ')})` : ''}`;
-      const rango = `De ${minY.toFixed(2)} a ${maxY.toFixed(2)}`;
-      const rangoTexto = `Todos los reales${(minY < -1e4 || maxY > 1e4) ? ` (excepto valores extremos)` : ` (aproximadamente de ${minY.toFixed(2)} a ${maxY.toFixed(2)})`}`;
-      const asintotasV = asintotas.length ? asintotas.join(', ') : 'Ninguna';
-      const asintotaH = horizontal ? `y = ${promedio.toFixed(2)}` : 'Ninguna';
+      // Mostrar dominio y rango
+      let dominioTexto = `Dominio: x ∈ ℝ`;
+      if (asintotasVerticales.length > 0) {
+        dominioTexto += `, x ≠ ${asintotasVerticales.join(", ")}`;
+      }
 
-      document.getElementById('info').innerHTML = `
-        <strong>📌 Dominio:</strong> ${dominio}<br>
-        <strong>📌 Rango:</strong> ${rangoTexto}<br>
-        <strong>📌 Asíntotas verticales:</strong> ${asintotasV}<br>
-        <strong>📌 Asíntota horizontal:</strong> ${asintotaH}
+      let rangoTexto = `Rango: y ∈ ℝ`;
+      if (asintotaH !== null) {
+        rangoTexto += `, y ≠ ${asintotaH.toFixed(2)}`;
+      }
+
+      document.getElementById("resultado").innerHTML = `
+        <strong>${dominioTexto}</strong><br>
+        <strong>${rangoTexto}</strong><br><br>
+        <strong>Forma simplificada:</strong> <code>${math.simplify(expr).toString()}</code>
       `;
-
-      textoExplicacion = `Dominio: ${dominio}. Rango: ${rangoTexto}. Asíntotas verticales: ${asintotasV}. ` +
-                         `Asíntota horizontal: ${asintotaH}.`;
     }
 
-    function leerExplicacion() {
-      const voz = new SpeechSynthesisUtterance(textoExplicacion);
-      voz.lang = 'es-ES';
-      speechSynthesis.cancel();
-      speechSynthesis.speak(voz);
-    }
+    graficar(); // Por defecto
   </script>
-
 </body>
 </html>
+
