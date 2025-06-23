@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <title>Graficador de funciones racionales tipo Mathway</title>
+  <title>Graficador racional tipo Mathway + voz</title>
   <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.8.0/math.min.js"></script>
   <style>
@@ -24,18 +24,31 @@
       padding: 2px 5px;
       border-radius: 4px;
     }
+    .voz-btn {
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      cursor: pointer;
+      padding: 10px 15px;
+      border-radius: 5px;
+      margin-top: 10px;
+    }
   </style>
 </head>
 <body>
   <h2>Graficador racional estilo Mathway</h2>
-  <label>Ingresa una función racional: (ej: (x^2 - 1)/(x^2 - 4))</label><br>
+  <label>Ingresa una función racional (ej: (x^2 - 1)/(x^2 - 4))</label><br>
   <input type="text" id="funcionInput" size="40" value="(x^2 - 1)/(x^2 - 4)">
   <button onclick="graficar()">Graficar</button>
+  <button class="voz-btn" onclick="leerVoz()">🔊 Explicación por voz</button>
 
   <div id="grafico" style="width: 100%; height: 500px;"></div>
   <div id="resultado"></div>
 
   <script>
+    let textoDominio = "";
+    let textoRango = "";
+
     function graficar() {
       const expr = document.getElementById("funcionInput").value;
       const node = math.parse(expr);
@@ -61,16 +74,13 @@
       }
 
       // Detección de asíntotas verticales
-      const frac = math.simplify(expr);
       const denomMatch = expr.match(/\/\(([^)]+)\)/);
       let asintotasVerticales = [];
       if (denomMatch) {
         const denom = denomMatch[1];
         try {
-          const factorizado = math.factor(denom);
-          const zeros = math.simplify(`roots(${denom})`).toString();
           const ceros = math.evaluate(`roots(${denom})`);
-          asintotasVerticales = Array.isArray(ceros) ? ceros.map(r => math.round(r, 3)) : [];
+          asintotasVerticales = Array.isArray(ceros) ? ceros.map(r => math.round(r, 2)) : [];
         } catch {}
       }
 
@@ -88,29 +98,28 @@
         line: { color: 'blue' }
       };
 
-      // Trazar asíntotas verticales
+      // Asíntotas verticales rosadas y punteadas
       const trace_asintotas_v = asintotasVerticales.map(x => ({
         x: [x, x],
         y: [-50, 50],
         mode: 'lines',
         name: `x = ${x}`,
-        line: { color: 'red', dash: 'dot' },
+        line: { color: 'deeppink', dash: 'dot' },
         showlegend: false
       }));
 
-      // Estimación de asíntota horizontal
+      // Asíntota horizontal verde punteada
       let asintotaH = null;
       try {
-        const top = node.args[0]; // numerador
-        const bottom = node.args[1]; // denominador
-        const gradoTop = math.simplify(top).filter(n => n.isSymbolNode && n.name === 'x').length;
-        const gradoBot = math.simplify(bottom).filter(n => n.isSymbolNode && n.name === 'x').length;
-
-        if (gradoTop < gradoBot) asintotaH = 0;
-        else if (gradoTop === gradoBot) {
-          const lcTop = math.derivative(top, 'x').evaluate({ x: 1 });
-          const lcBot = math.derivative(bottom, 'x').evaluate({ x: 1 });
-          asintotaH = lcTop / lcBot;
+        const top = node.args[0];
+        const bottom = node.args[1];
+        const degTop = math.degree(top, 'x');
+        const degBot = math.degree(bottom, 'x');
+        if (degTop < degBot) asintotaH = 0;
+        else if (degTop === degBot) {
+          const coeffTop = math.derivative(top, 'x').evaluate({ x: 1 });
+          const coeffBot = math.derivative(bottom, 'x').evaluate({ x: 1 });
+          asintotaH = coeffTop / coeffBot;
         }
       } catch {}
 
@@ -131,25 +140,31 @@
 
       Plotly.newPlot('grafico', [trace_funcion, ...trace_asintotas_v, ...trace_asintota_h], layout);
 
-      // Mostrar dominio y rango
-      let dominioTexto = `Dominio: x ∈ ℝ`;
+      // Texto de dominio y rango con formato: x ∈ ℝ excepto x = ...
+      textoDominio = `Dominio: x ∈ ℝ`;
       if (asintotasVerticales.length > 0) {
-        dominioTexto += `, x ≠ ${asintotasVerticales.join(", ")}`;
+        textoDominio += ` (excepto en x = ${asintotasVerticales.join(", ")})`;
       }
 
-      let rangoTexto = `Rango: y ∈ ℝ`;
+      textoRango = `Rango: y ∈ ℝ`;
       if (asintotaH !== null) {
-        rangoTexto += `, y ≠ ${asintotaH.toFixed(2)}`;
+        textoRango += ` (excepto en y = ${asintotaH.toFixed(2)})`;
       }
 
       document.getElementById("resultado").innerHTML = `
-        <strong>${dominioTexto}</strong><br>
-        <strong>${rangoTexto}</strong><br><br>
-        <strong>Forma simplificada:</strong> <code>${math.simplify(expr).toString()}</code>
+        <strong>${textoDominio}</strong><br>
+        <strong>${textoRango}</strong>
       `;
     }
 
-    graficar(); // Por defecto
+    function leerVoz() {
+      const texto = `${textoDominio}. ${textoRango}.`;
+      const speech = new SpeechSynthesisUtterance(texto);
+      speech.lang = 'es-ES';
+      window.speechSynthesis.speak(speech);
+    }
+
+    graficar(); // Carga inicial
   </script>
 </body>
 </html>
